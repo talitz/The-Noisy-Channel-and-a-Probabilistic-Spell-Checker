@@ -2,6 +2,8 @@ import csv
 import re
 from collections import Counter
 from IPython.core.debugger import set_trace
+import numpy
+letters    = 'abcdefghijklmnop qrstu-\'vwxyz'
 
 class Spell_Checker:
     """The class implements a context sensitive spell checker. The corrections
@@ -18,6 +20,7 @@ class Spell_Checker:
             lm: a language model object. Defaults to None
         """
         self.lm = lm
+        self.error_distributions_dict = []
 
     def build_model(self, text, n=3):
         """Returns a language model object built on the specified text. The language
@@ -75,6 +78,8 @@ class Spell_Checker:
         }
         
         WORDS = Counter(words(open(errors_file).read()))
+        all_correct_words = get_all_correct_words(errors_file)
+        
         with open(errors_file) as tsvfile:
             reader = csv.reader(tsvfile, delimiter='\t')
             for row in reader:
@@ -84,10 +89,10 @@ class Spell_Checker:
                 print("Error = {}".format(err))
                 print("Correction = {}".format(corr))
                 
-                return_inserts = edits1(err,WORDS,False,False,False,True,corr)
-                return_deletes = edits1(err,WORDS,True,False,False,False,corr) 
-                return_transposes = edits1(err,WORDS,False,True,False,False,corr)                
-                return_replaces = edits1(err,WORDS,False,False,True,False,corr)
+                return_inserts = edits1(corr,WORDS,False,False,False,True,err)
+                return_deletes = edits1(corr,WORDS,True,False,False,False,err) 
+                return_transposes = edits1(corr,WORDS,False,True,False,False,err)                
+                return_replaces = edits1(corr,WORDS,False,False,True,False,err)
                 print("return_inserts = {}".format(return_inserts))
                 print("return_deletes = {}".format(return_deletes))
                 print("return_transposes = {}".format(return_transposes))
@@ -100,82 +105,142 @@ class Spell_Checker:
                 
                 if(return_deletes):
                     for i in range(len(err)):
-                        curr_char = err[i]
-                        first_part = err[0:i]
-                        second_part = err[i+1:]
-                        print("current char = {}".format(err[i]))
+                        curr_char = corr[i]
+                        first_part = corr[0:i]
+                        second_part = corr[i+1:]
+                        print("current char = {}".format(corr[i]))
                         print("first part = {}".format(first_part))
                         print("second part = {}".format(second_part))
-                        if(first_part + second_part == corr):
-                            tupple = (curr_char,err[i-1])
+                        if(first_part + second_part == err):
+                            if(i-1 != -1):
+                                tupple = (curr_char,err[i-1])
+                            else:
+                                tupple = (curr_char," ")
                             print("added tupple = {}".format(tupple))
                             
                             if tupple in deletion_dict.keys(): 
                                 print("deletion_dict is not empty. adding 1 to it's value")
-                                deletion_dict[tupple] += 1
+                                deletion_dict[tupple]['errors_count'] += 1
                             else:
                                 print("deletion_dict is empty. default value is 1 now")
-                                deletion_dict[tupple] = 1
-                            break    
+                                deletion_dict[tupple] = {'errors_count': 1, 'good_counts':0,'good_word_string': None}
+                            count_in_good_words_string = curr_char + tupple[1]
+                            print("count_in_good_words_string = {}".format(count_in_good_words_string))
+                            deletion_dict[tupple]['good_counts'] = sum([all_correct_words[w] for w in all_correct_words if count_in_good_words_string in w])
+                            deletion_dict[tupple]['good_word_string'] =  count_in_good_words_string
+                            break
                 elif(return_replaces):
                     for i in range(len(corr)):
                         print("err[i] = {}".format(err[i]))
                         print("corr[i] = {}".format(corr[i]))
                         if(err[i] != corr[i]):
-                            tupple = (corr[i],corr[i-1])
+                            tupple = (err[i],corr[i])
                             print("added tupple = {}".format(tupple))
 
                             if tupple in substitution_dict.keys(): 
                                 print("substitution_dict is not empty. adding 1 to it's value")
-                                substitution_dict[tupple] += 1
+                                substitution_dict[tupple]['errors_count'] += 1
                             else:
                                 print("substitution_dict is empty. default value is 1 now")
-                                substitution_dict[tupple] = 1
+                                substitution_dict[tupple] = {'errors_count': 1, 'good_counts':0,'good_word_string': None}
+                            count_in_good_words_string = corr[i]
+                            print("count_in_good_words_string = {}".format(count_in_good_words_string))
+                            substitution_dict[tupple]['good_counts'] = sum([all_correct_words[w] for w in all_correct_words if count_in_good_words_string in w])
+                            substitution_dict[tupple]['good_word_string'] =  count_in_good_words_string
                             break   
                 elif(return_transposes): 
                     for i in range(len(corr)):
                         print("err[i] = {}".format(err[i]))
                         print("corr[i] = {}".format(corr[i]))
                         if(err[i] != corr[i]):
+                            is_added_tupple = False
                             for j in range(i+1, len(corr)):
                                 if(err[j] == corr[j]):
                                     tupple = (err[i:j],corr[i:j])
                                     print("added tupple = {}".format(tupple))
-
+                                    is_added_tupple = True
                                     if tupple in transposition_dict.keys(): 
                                         print("transposition_dict is not empty. adding 1 to it's value")
-                                        transposition_dict[tupple] += 1
+                                        transposition_dict[tupple]['errors_count'] += 1
                                     else:
                                         print("substitution_dict is empty. default value is 1 now")
-                                        transposition_dict[tupple] = 1
+                                        transposition_dict[tupple] = {'errors_count': 1, 'good_counts':0,'good_word_string': None}
+                                    count_in_good_words_string = corr[i:j]
+                                    print("count_in_good_words_string = {}".format(count_in_good_words_string))
+                                    transposition_dict[tupple]['good_counts'] = sum([all_correct_words[w] for w in all_correct_words if count_in_good_words_string in w])
+                                    transposition_dict[tupple]['good_word_string'] =  count_in_good_words_string
                                     break
-                            break                 
+                                    
+                            if(is_added_tupple == False):
+                                tupple = (err[i:],corr[i:])
+                                print("added tupple = {}".format(tupple))
+
+                                if tupple in transposition_dict.keys(): 
+                                    print("transposition_dict is not empty. adding 1 to it's value")
+                                    transposition_dict[tupple]['errors_count'] += 1
+                                else:
+                                    print("substitution_dict is empty. default value is 1 now")
+                                    transposition_dict[tupple] = {'errors_count': 1, 'good_counts':0,'good_word_string': None}
+                                count_in_good_words_string = corr[i:] + err[i:]
+                                print("count_in_good_words_string = {}".format(count_in_good_words_string))
+                                transposition_dict[tupple]['good_counts'] = sum([all_correct_words[w] for w in all_correct_words if count_in_good_words_string in w])
+                                transposition_dict[tupple]['good_word_string'] =  count_in_good_words_string
+                            break
+
                 elif(return_inserts): 
-                    for i in range(len(err)):
-                        print("err[i] = {}".format(err[i]))
-                        print("corr[i] = {}".format(corr[i]))
-                        if(err[i] != corr[i]):
-                            print("--")
-                            print("err[0:i] = {}".format(err[0:i]))
+                    for i in range(max(len(err),len(corr))):
+                        if(i < len(err) and i < len(corr)):                            
+                            print("err[i] = {}".format(err[i]))
                             print("corr[i] = {}".format(corr[i]))
-                            print("err[i+1:] = {}".format(err[i+1:]))                                        
-                            print(corr)
-                            print("--")
-                            if(err[0:i] + corr[i] + err[i:] == corr):
-                                tupple = (corr[i],err[i-1])
+                            if(err[i] != corr[i]):
+                                print("--")
+                                print("err[0:i] = {}".format(err[0:i]))
+                                print("corr[i] = {}".format(corr[i]))
+                                print("err[i+1:] = {}".format(err[i+1:]))                                        
+                                print(corr)
+                                print("--")
+                                if(corr[0:i] + err[i] + corr[i:] == err):
+                                    if(i-1 != -1):
+                                        tupple = (err[i],corr[i-1])
+                                    else:
+                                        tupple = (err[i]," ")
+                                    print("added tupple = {}".format(tupple))
+
+                                    if tupple in insertion_dict.keys(): 
+                                        print("insertion_dict is not empty. adding 1 to it's value")
+                                        insertion_dict[tupple]['errors_count'] += 1
+                                    else:
+                                        print("insertion_dict is empty. default value is 1 now")
+                                        insertion_dict[tupple] = {'errors_count': 1, 'good_counts':0,'good_word_string': None}
+                                    count_in_good_words_string = corr[i-1]
+                                    print("count_in_good_words_string = {}".format(count_in_good_words_string))
+                                    insertion_dict[tupple]['good_counts'] = sum([all_correct_words[w] for w in all_correct_words if count_in_good_words_string in w])
+                                    insertion_dict[tupple]['good_word_string'] =  count_in_good_words_string
+                                    break
+                        else:
+                            if(corr + err[i] == err):
+                                if(i-1 != -1):
+                                    tupple = (err[i]," ")                                
+                                else:
+                                    tupple = (err[i],corr[i-1])                                    
+                                    
                                 print("added tupple = {}".format(tupple))
 
                                 if tupple in insertion_dict.keys(): 
                                     print("insertion_dict is not empty. adding 1 to it's value")
-                                    insertion_dict[tupple] += 1
+                                    insertion_dict[tupple]['errors_count'] += 1
                                 else:
                                     print("insertion_dict is empty. default value is 1 now")
-                                    insertion_dict[tupple] = 1
-                                break 
+                                    insertion_dict[tupple] = {'errors_count': 1, 'good_counts':0}
+                                    count_in_good_words_string = corr[i-1]
+                                    print("count_in_good_words_string = {}".format(count_in_good_words_string))
+                                    insertion_dict[tupple]['good_counts'] = sum([all_correct_words[w] for w in all_correct_words if count_in_good_words_string in w])
+                                break
                 else:
                     print("all return types are null!")                 
                 print("-------------------")  
-        return ret_dict
+        self.error_distributions_dict = convert_to_error_distributions_dict(ret_dict)
+        return self.error_distributions_dict
                                 
     def add_error_tables(self, error_tables):
         """ Adds the speficied dictionary of error tables as an instance variable.
@@ -185,7 +250,7 @@ class Spell_Checker:
                 error_tables (dict): a dictionary of error tables in the format
                 returned by  learn_error_distribution()
         """
-
+        self.error_distributions_dict = error_tables
 
     def evaluate(self,text):
         """Returns the log-likelihod of the specified text given the language
@@ -197,6 +262,7 @@ class Spell_Checker:
            Returns:
                Float. The float should reflect the (log) probability.
         """
+        self.lm.evaluate(self,text)
 
     def spell_check(self, text, alpha):
         """ Returns the most probable fix for the specified text. Use a simple
@@ -210,16 +276,36 @@ class Spell_Checker:
             Return:
                 A modified string (or a copy of the original if no corrections are made.)
         """
+        all_words = text.split()
+        print("all words = {}".format(all_words))
+        for i in range(len(all_words)):
+            all_words_iteration = all_words.copy()
+            mistake = all_words_iteration[i]
+            rest_list = []
+            all_words_iteration.remove(mistake)
+            print("mistake? = {}".format(mistake))
+            print("rest_list = {}".format(all_words_iteration))
+            splits     = [(mistake[:i], mistake[i:])    for i in range(len(mistake) + 1)]
+            print("splits = {}".format(splits))
+            deletes    = [L + R[1:]               for L, R in splits if R]
+            print("deletes = {}".format(deletes))
+            transposes = [L + R[1] + R[0] + R[2:] for L, R in splits if len(R)>1]
+            print("transposes = {}".format(transposes))            
+            replaces   = [L + c + R[1:]           for L, R in splits if R for c in letters]
+            print("replaces = {}".format(replaces))
+            inserts    = [L + c + R               for L, R in splits for c in letters]
+            print("inserts = {}".format(inserts))            
+            
+            #evaluate_prob = self.evaluate(self," ".join(all_words_iteration))
+            #print("evaluate probability = {}".format(evaluate_prob))
 
 def edits1(word, WORDS, return_deletes, return_transposes, return_replaces, return_inserts,correct):
     "All edits that are one edit away from `word`."
-    letters    = 'abcdefghijklmnop qrstu-\'vwxyz'
     splits     = [(word[:i], word[i:])    for i in range(len(word) + 1)]
     deletes    = [L + R[1:]               for L, R in splits if R]
     transposes = [L + R[1] + R[0] + R[2:] for L, R in splits if len(R)>1]
     replaces   = [L + c + R[1:]           for L, R in splits if R for c in letters]
     inserts    = [L + c + R               for L, R in splits for c in letters]
-    
     ret        = []
     
     if(return_deletes):
@@ -240,6 +326,17 @@ def edits1(word, WORDS, return_deletes, return_transposes, return_replaces, retu
         return True
     else:
         return False
+
+def convert_to_error_distributions_dict(error_distributions_dict):
+    for key in error_distributions_dict:
+        for value in error_distributions_dict[key]:
+            print("value = {}".format(error_distributions_dict[key][value]))
+            errors_count = error_distributions_dict[key][value]['errors_count']
+            good_counts = error_distributions_dict[key][value]['good_counts']
+            print("errors_count = {}".format(errors_count))
+            print("good_count = {}".format(good_counts))
+            error_distributions_dict[key][value] = errors_count / (good_counts +1)
+    return error_distributions_dict
 
 def known(words,WORDS):
     agg = []
