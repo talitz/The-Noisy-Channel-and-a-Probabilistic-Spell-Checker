@@ -184,6 +184,9 @@ class Ngram_Language_Model:
                     count_prefix = self._count_check_anagram(prefix)
                 #print("count_prefix = {}".format(count_prefix))
                 #print("count_seq = {}".format(count_seq))
+                if seq not in self.ngrams_dictionaries[self.n].keys():
+                    print("seq = {}, smoothing!".format(seq))
+                    return math.log(self.smooth(seq))
             else:
                 prefix = split_text[(index - self.n + 1): index]
                 suffix = split_text[index]
@@ -194,6 +197,7 @@ class Ngram_Language_Model:
                 else:
                     seq = (' '.join([x for x in prefix])) + ' ' + suffix
                 if seq not in self.ngrams_dictionaries[self.n].keys():
+                    print("seq = {}, smoothing!".format(seq))
                     return math.log(self.smooth(seq))
                 count_seq = 0
                 for key, value in self.ngrams_dictionaries[self.n].items():
@@ -235,9 +239,13 @@ class Ngram_Language_Model:
             Returns:
                 float. The smoothed probability.
         """
-        vocabulary_count = len(set(self.text.split()))
         ngram_count = self.ngrams_dictionaries[self.n][ngram]
-        total_ngram_count = len(self.ngrams_dictionaries[self.n].keys())
+       
+        if(ngram_count == 0):
+            del self.ngrams_dictionaries[self.n][ngram]
+            
+        total_ngram_count = len(self.ngrams_dictionaries[self.n].keys())     
+        vocabulary_count = len(set(self.text.split()))
         return (ngram_count + 1) / (total_ngram_count + vocabulary_count)
 
 def normalize_text(text):

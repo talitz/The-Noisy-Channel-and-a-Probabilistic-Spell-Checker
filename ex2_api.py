@@ -1,5 +1,5 @@
 import csv
-import re
+import re,math
 from collections import Counter
 from IPython.core.debugger import set_trace
 import numpy
@@ -262,7 +262,7 @@ class Spell_Checker:
            Returns:
                Float. The float should reflect the (log) probability.
         """
-        self.lm.evaluate(self,text)
+        return self.lm.evaluate(text)
 
     def spell_check(self, text, alpha):
         """ Returns the most probable fix for the specified text. Use a simple
@@ -278,26 +278,96 @@ class Spell_Checker:
         """
         all_words = text.split()
         print("all words = {}".format(all_words))
+        max_probability = 0
         for i in range(len(all_words)):
+            print("----------------------")
             all_words_iteration = all_words.copy()
-            mistake = all_words_iteration[i]
+            w = all_words_iteration[i]
             rest_list = []
-            all_words_iteration.remove(mistake)
-            print("mistake? = {}".format(mistake))
-            print("rest_list = {}".format(all_words_iteration))
-            splits     = [(mistake[:i], mistake[i:])    for i in range(len(mistake) + 1)]
-            print("splits = {}".format(splits))
-            deletes    = [L + R[1:]               for L, R in splits if R]
-            print("deletes = {}".format(deletes))
-            transposes = [L + R[1] + R[0] + R[2:] for L, R in splits if len(R)>1]
-            print("transposes = {}".format(transposes))            
-            replaces   = [L + c + R[1:]           for L, R in splits if R for c in letters]
-            print("replaces = {}".format(replaces))
-            inserts    = [L + c + R               for L, R in splits for c in letters]
-            print("inserts = {}".format(inserts))            
+            all_words_iteration.remove(w)
+            print("Current W = {}".format(w))
+            print("--- Sentence / W = {}".format(all_words_iteration))
             
-            #evaluate_prob = self.evaluate(self," ".join(all_words_iteration))
-            #print("evaluate probability = {}".format(evaluate_prob))
+            print("--- Calculating all candidates C(X) = {X1,X2,.....} for W:")
+            splits     = [(w[:i], w[i:])    for i in range(len(w) + 1)]
+            deletes    = [L + R[1:]               for L, R in splits if R]
+            transposes = [L + R[1] + R[0] + R[2:] for L, R in splits if len(R)>1]
+            replaces   = [L + c + R[1:]           for L, R in splits if R for c in letters]
+            inserts    = [L + c + R               for L, R in splits for c in letters]
+            print("--- deletes = {}".format(deletes))
+            print("--- transposes = {}".format(transposes))            
+            print("--- replaces = {}".format(replaces))
+            print("--- inserts = {}".format(inserts))            
+            X = [("deletes",x) for x in deletes] + [("inserts",x) for x in inserts] + [("transposes",x) for x in transposes] + [("replaces",x) for x in replaces]
+            print("--- all_candidates = {}".format(X))            
+            
+            pr, best_fix_so_far, possible_fix, new_sentence = None, None, None, None            
+            
+            for x_type,x in X:
+                print("--------- New candidate x to fix the mistake in the sentence!")
+                print("x = {}".format(x))
+                print("w = {}".format(w))  
+                print("type of error = {}".format(x_type))  
+                all_words_iteration_copy = all_words_iteration.copy()   
+                print("Sentence / w = {}".format(all_words_iteration_copy))
+                print("Inserting {} in place {}".format(x,i))
+                all_words_iteration_copy.insert(i,x)
+                    
+                print("Calculating prior for possible sentence = {}".format(all_words_iteration_copy))
+                prior = abs(self.evaluate(" ".join(all_words_iteration_copy)))
+                pr = prior
+                print("Prior = {}".format(prior))
+                if(x == w):
+                    pr = pr * alpha
+                    print("x = w :: pr = pr * alpha")
+                    possible_fix = x
+                elif(x in [p[1] for p in X] and x != w):
+                    print("^^^^^^^^^^^^^^^^^^")                 
+                    print(x_type)
+                    print(x)
+                    if x_type == "deletes":
+                            for first,second in self.error_distributions_dict["deletion"]:
+                                trying_to_apply_the_error_string = delete_str(w,w.find(first))
+                                print("trying_to_apply_the_error_string = {}".format(trying_to_apply_the_error_string))
+                                print("x = {}".format(x))
+                                if(trying_to_apply_the_error_string == x):
+                                    print("This error was possible [{},{}] and we are considering this value from the error table".format(first,second))
+                                    pr = pr * self.error_distributions_dict["deletion"][(first,second)]
+                                    possible_fix = insert_str(x,first,x.find(second)+1)
+                                    print("possible fix is = {}".format(possible_fix))
+                                    break
+                    if x_type == "inserts":
+                            for first,second in self.error_distributions_dict["insertion"]:
+                                trying_to_apply_the_error_string = insert_str(w,first,w.find(second) + 1)
+                                print("trying_to_apply_the_error_string = {}".format(trying_to_apply_the_error_string))
+                                print("x = {}".format(x))
+                                if(trying_to_apply_the_error_string == x):
+                                    print("This error was possible [{},{}] and we are considering this value from the error table".format(first,second))
+                                    pr = pr * self.error_distributions_dict["insertion"][(first,second)]
+                                    possible_fix = delete_str(x,x.find(first))
+                                    break
+                    #elif x_type == "replaces":
+                    #        for first,second in self.error_distributions_dict["substitution"]:
+                    #            print(first,second)
+                    #elif x_type == "transposes":
+                    #        for first,second in self.error_distributions_dict["transposition"]:
+                    #            print(first,second)
+                    else:
+                        print("x_type is none of the supported types")                                            
+                        
+                    print("^^^^^^^^^^^^^^^^^^")                    
+                else:
+                    print("probability is 0")                    
+                    pr = pr * 0
+                print("pr = {}".format(pr))  
+                if(pr > max_probability):
+                    print("Found higher probability then max probability = {}, replacing max probability and possible fix for sentence".format(max_probability))
+                    max_probability = pr
+                    best_fix_so_far = possible_fix
+                    print("Potential fix = {}".format(best_fix_so_far))
+                    
+            print("The perfect correction for the sentence {} is using {}".format(all_words_iteration_copy,best_fix_so_far))
+            print("----------------------")
 
 def edits1(word, WORDS, return_deletes, return_transposes, return_replaces, return_inserts,correct):
     "All edits that are one edit away from `word`."
@@ -335,7 +405,8 @@ def convert_to_error_distributions_dict(error_distributions_dict):
             good_counts = error_distributions_dict[key][value]['good_counts']
             print("errors_count = {}".format(errors_count))
             print("good_count = {}".format(good_counts))
-            error_distributions_dict[key][value] = errors_count / (good_counts +1)
+            print("Unique values in key = {}, key = {}".format(len(error_distributions_dict[key]),key))
+            error_distributions_dict[key][value] = (errors_count + 1) / (good_counts + len(error_distributions_dict[key]))
     return error_distributions_dict
 
 def known(words,WORDS):
@@ -370,6 +441,12 @@ def get_all_correct_words(error_file):
     return Counter(agg)
 
 def words(text): return re.findall(r'\w+', text.lower())
+
+def insert_str(string, str_to_insert, index):
+    return string[:index] + str_to_insert + string[index:]
+
+def delete_str(string, index):
+    return string[:index] + "" + string[index+1:]
 
 def who_am_i():
     """Returns a ductionary with your name, id number and email. keys=['name', 'id','email']
