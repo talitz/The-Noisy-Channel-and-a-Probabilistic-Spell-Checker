@@ -265,7 +265,12 @@ def normalize_text(text):
     """
     text = re.sub('([.,!?()])', r' \1 ', text)
     text = re.sub('\s{2,}', ' ', text)
+    text = text.replace('\n', ' ').replace('\r', '')
     return text.lower()
+
+def stripNonAlphaNum(text):
+    import re
+    return re.compile(r'\W+', re.UNICODE).split(text)
 
 def who_am_i():
     """Returns a ductionary with your name, id number and email. keys=['name', 'id','email']
