@@ -179,7 +179,7 @@ class Spell_Checker:
                                     print("transposition_dict is not empty. adding 1 to it's value")
                                     transposition_dict[tupple]['errors_count'] += 1
                                 else:
-                                    print("substitution_dict is empty. default value is 1 now")
+                                    print("transposition_dict is empty. default value is 1 now")
                                     transposition_dict[tupple] = {'errors_count': 1, 'good_counts':0,'good_word_string': None}
                                 count_in_good_words_string = corr[i:] + err[i:]
                                 print("count_in_good_words_string = {}".format(count_in_good_words_string))
@@ -278,7 +278,10 @@ class Spell_Checker:
         """
         all_words = text.split()
         print("all words = {}".format(all_words))
-        max_probability = 0
+        max_probability = -math.inf
+        pr, best_possible_fix, possible_fix, new_sentence,w_to_replace_in_best_fix = None, None, None, None,None
+        
+        #Iterate over all words w in the sentence
         for i in range(len(all_words)):
             print("----------------------")
             all_words_iteration = all_words.copy()
@@ -294,80 +297,103 @@ class Spell_Checker:
             transposes = [L + R[1] + R[0] + R[2:] for L, R in splits if len(R)>1]
             replaces   = [L + c + R[1:]           for L, R in splits if R for c in letters]
             inserts    = [L + c + R               for L, R in splits for c in letters]
-            print("--- deletes = {}".format(deletes))
-            print("--- transposes = {}".format(transposes))            
-            print("--- replaces = {}".format(replaces))
-            print("--- inserts = {}".format(inserts))            
+            #print("--- deletes = {}".format(deletes))
+            #print("--- transposes = {}".format(transposes))            
+            #print("--- replaces = {}".format(replaces))
+            #print("--- inserts = {}".format(inserts))            
             X = [("deletes",x) for x in deletes] + [("inserts",x) for x in inserts] + [("transposes",x) for x in transposes] + [("replaces",x) for x in replaces]
-            print("--- all_candidates = {}".format(X))            
+            print("--- all_candidates = {}".format(X))                        
             
-            pr, best_fix_so_far, possible_fix, new_sentence = None, None, None, None            
-            
+            #Iterate over all possible x in X as candidates to replace w
             for x_type,x in X:
                 print("--------- New candidate x to fix the mistake in the sentence!")
                 print("x = {}".format(x))
-                print("w = {}".format(w))  
-                print("type of error = {}".format(x_type))  
+                print("w = {}".format(w))    
+                print("x_type = {}".format(x_type))                
                 all_words_iteration_copy = all_words_iteration.copy()   
                 print("Sentence / w = {}".format(all_words_iteration_copy))
                 print("Inserting {} in place {}".format(x,i))
                 all_words_iteration_copy.insert(i,x)
                     
-                print("Calculating prior for possible sentence = {}".format(all_words_iteration_copy))
-                prior = abs(self.evaluate(" ".join(all_words_iteration_copy)))
+                print("Calculating prior for possible sentence = {}".format(" ".join(all_words_iteration_copy)))
+                prior = abs(self.evaluate(" ".join(all_words_iteration_copy))) * (1 - alpha) / len(X)
                 pr = prior
                 print("Prior = {}".format(prior))
+                
                 if(x == w):
                     pr = pr * alpha
                     print("x = w :: pr = pr * alpha")
                     possible_fix = x
                 elif(x in [p[1] for p in X] and x != w):
-                    print("^^^^^^^^^^^^^^^^^^")                 
-                    print(x_type)
-                    print(x)
+                    print("|||||||||||||||||||||||")
                     if x_type == "deletes":
-                            for first,second in self.error_distributions_dict["deletion"]:
-                                trying_to_apply_the_error_string = delete_str(w,w.find(first))
-                                print("trying_to_apply_the_error_string = {}".format(trying_to_apply_the_error_string))
-                                print("x = {}".format(x))
-                                if(trying_to_apply_the_error_string == x):
-                                    print("This error was possible [{},{}] and we are considering this value from the error table".format(first,second))
-                                    pr = pr * self.error_distributions_dict["deletion"][(first,second)]
-                                    possible_fix = insert_str(x,first,x.find(second)+1)
-                                    print("possible fix is = {}".format(possible_fix))
-                                    break
-                    if x_type == "inserts":
                             for first,second in self.error_distributions_dict["insertion"]:
-                                trying_to_apply_the_error_string = insert_str(w,first,w.find(second) + 1)
-                                print("trying_to_apply_the_error_string = {}".format(trying_to_apply_the_error_string))
-                                print("x = {}".format(x))
-                                if(trying_to_apply_the_error_string == x):
-                                    print("This error was possible [{},{}] and we are considering this value from the error table".format(first,second))
-                                    pr = pr * self.error_distributions_dict["insertion"][(first,second)]
-                                    possible_fix = delete_str(x,x.find(first))
-                                    break
-                    #elif x_type == "replaces":
-                    #        for first,second in self.error_distributions_dict["substitution"]:
-                    #            print(first,second)
-                    #elif x_type == "transposes":
-                    #        for first,second in self.error_distributions_dict["transposition"]:
-                    #            print(first,second)
+                                print("current examined error to apply = [{},{}]".format(first,second))                        
+                                if(x.find(second) != -1 or (x.find(first) == -1 and second == " ")):
+                                    trying_to_apply_the_error_string = insert_str(x,first,x.find(second)+1)
+                                    print("trying_to_apply_the_error_string : inserting {} after {} => {}".format(first,second,trying_to_apply_the_error_string))
+                                    print("x = {}".format(x))
+                                    if(trying_to_apply_the_error_string == w):
+                                        print("This error was possible insertion : [{},{}] and we are considering this value from the error table".format(first,second))
+                                        pr = pr * self.error_distributions_dict["insertion"][(first,second)]
+                                        possible_fix = x
+                                        print("possible fix was updated to = {}".format(possible_fix)) 
+                                        break
+                    if x_type == "inserts":
+                            for first,second in self.error_distributions_dict["deletion"]:
+                                print("current examined error to apply = [{},{}]".format(first,second))
+                                if(x.find(first) != -1 and x.find(second) != -1 and (x.find(second) + 1 == x.find(first))):
+                                    trying_to_apply_the_error_string = delete_str(x,x.find(first))
+                                    print("trying_to_apply_the_error_string : deleting {} after {} => {}".format(first,second,trying_to_apply_the_error_string))
+                                    print("x = {}".format(x))
+                                    if(trying_to_apply_the_error_string == w):
+                                        print("This error was possible deletion : [{},{}] and we are considering this value from the error table".format(first,second))
+                                        pr = pr * self.error_distributions_dict["deletion"][(first,second)]
+                                        possible_fix = x                                       
+                                        print("possible fix was updated to = {}".format(possible_fix))                          
+                                        break
+                    elif x_type == "replaces":
+                            for first,second in self.error_distributions_dict["substitution"]:
+                                print("current examined error to apply = [{},{}]".format(first,second))
+                                if(x.find(first) != -1):
+                                    trying_to_apply_the_error_string = x.replace(first,second,1)
+                                    print("trying_to_apply_the_error_string : substituting {} with {} => {}".format(first,second,trying_to_apply_the_error_string))
+                                    print("x = {}".format(x))
+                                    if(trying_to_apply_the_error_string == w):
+                                        print("This error was possible [{},{}] and we are considering this value from the error table".format(first,second))
+                                        pr = pr * self.error_distributions_dict["substitution"][(first,second)]
+                                        possible_fix = x                                             
+                                        print("possible fix was updated to = {}".format(possible_fix))                          
+                                        break
+                    elif x_type == "transposes":
+                            for first,second in self.error_distributions_dict["transposition"]:
+                                print("current examined error to apply = [{},{}]".format(first,second))
+                                if(x.find(first) != -1):
+                                    trying_to_apply_the_error_string = x.replace(first,second,1)
+                                    print("trying_to_apply_the_error_string : transposition of {} with {} => {}".format(first,second,trying_to_apply_the_error_string))
+                                    print("x = {}".format(x))
+                                    if(trying_to_apply_the_error_string == w):
+                                        print("This error was possible [{},{}] and we are considering this value from the error table".format(first,second))
+                                        pr = pr * self.error_distributions_dict["transposition"][(first,second)]
+                                        possible_fix = x                                             
+                                        print("possible fix was updated to = {}".format(possible_fix))                          
+                                        break 
                     else:
-                        print("x_type is none of the supported types")                                            
-                        
-                    print("^^^^^^^^^^^^^^^^^^")                    
+                        print("x_type is of type unknown")
                 else:
                     print("probability is 0")                    
                     pr = pr * 0
-                print("pr = {}".format(pr))  
-                if(pr > max_probability):
-                    print("Found higher probability then max probability = {}, replacing max probability and possible fix for sentence".format(max_probability))
-                    max_probability = pr
-                    best_fix_so_far = possible_fix
-                    print("Potential fix = {}".format(best_fix_so_far))
                     
-            print("The perfect correction for the sentence {} is using {}".format(all_words_iteration_copy,best_fix_so_far))
-            print("----------------------")
+                print("Calculated probability = {}".format(pr))  
+                if(pr > max_probability):
+                    print("Found higher probability > max probability = {}".format(max_probability))
+                    max_probability = pr
+                    w_to_replace_in_best_fix = w
+                    best_possible_fix = possible_fix
+                    print("Replacing -> {} <- with -> {} <- as possible fix for the sentence so far".format(w,possible_fix))   
+                print("|||||||||||||||||||||||")
+        all_words[all_words.index(w_to_replace_in_best_fix)] = best_possible_fix
+        return " ".join(all_words)
 
 def edits1(word, WORDS, return_deletes, return_transposes, return_replaces, return_inserts,correct):
     "All edits that are one edit away from `word`."
@@ -445,8 +471,8 @@ def words(text): return re.findall(r'\w+', text.lower())
 def insert_str(string, str_to_insert, index):
     return string[:index] + str_to_insert + string[index:]
 
-def delete_str(string, index):
-    return string[:index] + "" + string[index+1:]
+def delete_str(string, first):
+        return string[:first] + "" + string[first+1:]
 
 def who_am_i():
     """Returns a ductionary with your name, id number and email. keys=['name', 'id','email']

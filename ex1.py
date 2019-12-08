@@ -156,6 +156,7 @@ class Ngram_Language_Model:
             given_text = normalize_text(text)
             #print("normalize text = {}".format(given_text))
             if index - (self.n - 1) < 0:
+                #print("flow 1")
                 prefix = ' '.join([x for x in split_text[0:index]])
                 suffix = split_text[index]
                 #print("prefix = {}".format(prefix))
@@ -165,6 +166,7 @@ class Ngram_Language_Model:
                 else:
                     seq = prefix + suffix
                 if index == 0:
+                    #print("flow 1->2")
                     seq = seq.replace(' ', '')
                     #print("seq = {}".format(seq))
                     for key, value in self.ngrams_dictionaries[self.n].items():
@@ -172,6 +174,7 @@ class Ngram_Language_Model:
                             count_seq = count_seq + value
                     count_prefix = count_prefix + len(self.text.split()) - self.n + 1
                 else:
+                    #print("flow 1->3")
                     #print("seq = {}".format(seq))
                     #print("count_seq = {}".format(count_seq))
                     for key, value in self.ngrams_dictionaries[self.n].items():
@@ -182,12 +185,13 @@ class Ngram_Language_Model:
                             #else:
                                 #print("key = {} doesn't start with = {}".format(key,seq))
                     count_prefix = self._count_check_anagram(prefix)
-                #print("count_prefix = {}".format(count_prefix))
-                #print("count_seq = {}".format(count_seq))
-                if seq not in self.ngrams_dictionaries[self.n].keys():
-                    print("seq = {}, smoothing!".format(seq))
+                    #print("count_prefix = {}".format(count_prefix))
+                    #print("count_seq = {}".format(count_seq))
+                if count_seq == 0:
+                    #print("seq = {}, smoothing!".format(seq))
                     return math.log(self.smooth(seq))
             else:
+                #print("flow 2")
                 prefix = split_text[(index - self.n + 1): index]
                 suffix = split_text[index]
                 #print("prefix = {}".format(prefix))
@@ -197,7 +201,7 @@ class Ngram_Language_Model:
                 else:
                     seq = (' '.join([x for x in prefix])) + ' ' + suffix
                 if seq not in self.ngrams_dictionaries[self.n].keys():
-                    print("seq = {}, smoothing!".format(seq))
+                    #print("seq = {}, smoothing!".format(seq))
                     return math.log(self.smooth(seq))
                 count_seq = 0
                 for key, value in self.ngrams_dictionaries[self.n].items():
@@ -206,7 +210,7 @@ class Ngram_Language_Model:
                         #else:
                             #print("key = {} doesn't start with = {}".format(key,seq))
                 count_prefix = 0
-                for key, value in self.ngrams_dictionaries[self.n].items():
+                for key, value in self.ngrams_dictionaries[self.n].items() or count_seq == 0:
                         if key.startswith(' '.join(prefix)):
                             count_prefix = count_prefix + value
                 #print("count_prefix = {}".format(count_prefix))
